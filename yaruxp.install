@@ -1,0 +1,39 @@
+<?php
+
+  function yaruxp_schema() {
+    $schema['yaruxp_nodes_posts'] = array(
+      'fields' => array(
+        'nid' => array(
+          'type' => 'int',
+          'not null' => true,
+          'unsigned' => true
+        ),
+        'pid' => array(
+          'type' => int,
+          'not null' => true,
+          'unsigned' => true
+        )
+      ),
+      'indexes' => array(
+        'yaruxp_nid' => array('nid'),
+        'yaruxp_pid' => array('pid')
+      )
+    );
+
+    return $schema;
+  }
+
+  function yaruxp_install() {
+    drupal_install_schema('yaruxp');
+  }
+
+  function yaruxp_uninstall() {
+    drupal_uninstall_schema('yaruxp');
+
+    variable_del('yaruxp_client_id');
+    variable_del('yaruxp_client_secret');
+    variable_del('yaruxp_uid');
+    variable_del('yaruxp_options');
+    variable_del('yaruxp_token');
+    variable_del('yaruxp_types');
+  }

@@ -1,0 +1,285 @@
+<?php
+
+  function _yaruxp_get_content_types() {
+    $types = node_get_types('types');
+
+    $result = array();
+    foreach($types as $key => $type)
+      $result[$key] = $type->name;
+
+    return $result;
+  }
+
+  function _yaruxp_construct_variable($array) {
+    $result = array();
+    foreach($array as $key => $value)
+      if($value)
+        $result[] = $key;
+
+    return $result;
+  }
+
+  function _yaruxp_get_options() {
+    return variable_get('yaruxp_options', array());
+  }
+
+
+  function yaruxp_perm() {
+    return array('access yaruxp settings');
+  }
+
+  function yaruxp_menu() {
+    $items['admin/settings/yaruxp'] = array(
+      'title' => 'Ya.Ru CrossPoster',
+      'description' => 'Allows you to cross-post nodes to Ya.Ru',
+      'access arguments' => array('access yaruxp settings'),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('yaruxp_general_form'),
+      'type' => MENU_NORMAL_ITEM
+    );
+    $items['admin/settings/yaruxp/general'] = array(
+      'title' => 'General settings',
+      'access arguments' => array('access yaruxp settings'),
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+      'weight' => 0
+    );
+    $items['admin/settings/yaruxp/materials'] = array(
+      'title' => 'Materials settings',
+      'access arguments' => array('access yaruxp settings'),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('yaruxp_materials_form'),
+      'type' => MENU_LOCAL_TASK,
+      'weight' => 1
+    );
+
+    $items['yaruxp/callback'] = array(
+      'title' => '',
+      'access arguments' => array('access yaruxp settings'),
+      'page callback' => 'yaruxp_process_token',
+      'type' => MENU_CALLBACK
+    );
+
+    return $items;
+  }
+
+  function yaruxp_general_form() {
+    $form = array();
+
+    $form['uid'] = array(
+      '#type' => 'textfield',
+      '#title' => t('User Identifier'),
+      '#default_value' => variable_get('yaruxp_uid', ''),
+      '#required' => true
+    );
+
+    $form['oauth'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('OAuth authorization settings')
+    );
+    $form['oauth']['client_id'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Client ID'),
+      '#default_value' => variable_get('yaruxp_client_id', ''),
+      '#required' => true
+    );
+    $form['oauth']['client_secret'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Client secret'),
+      '#default_value' => variable_get('yaruxp_client_secret', ''),
+      '#required' => true
+    );
+
+    $form['publishing'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Publishing settings')
+    );
+    $form['publishing']['options'] = array(
+      '#type' => 'checkboxes',
+      '#title' => '',
+      '#options' => array(
+        'check_flag' => t('Ya.Ru CrossPoster flag is checked by default'),
+        'add_link' => t('Add link to the published node'),
+        'delete_post' => t('Delete post with the related node')
+      ),
+      '#default_value' => variable_get('yaruxp_options', array('check_flag', 'add_link'))
+    );
+
+    $form['save_settings'] = array(
+      '#type' => 'submit',
+      '#value' => t('Save settings')
+    );
+
+    return $form;
+  }
+  function yaruxp_general_form_submit($form, &$form_state) {
+    variable_set('yaruxp_client_id', $form_state['values']['client_id']);
+    variable_set('yaruxp_client_secret', $form_state['values']['client_secret']);
+    variable_set('yaruxp_uid', $form_state['values']['uid']);
+    variable_set('yaruxp_options', $form_state['values']['options']);
+
+    drupal_set_message(t('General settings has been successfully saved!'));
+
+    if(is_null(variable_get('yaruxp_token', null)))
+      drupal_goto('https://oauth.yandex.ru/authorize', array('response_type' => 'code', 'client_id' => $form_state['values']['client_id']));
+  }
+
+  function yaruxp_process_token() {
+    if($_REQUEST['code']) {
+      $data = array(
+        'grant_type' => "authorization_code",
+        'code' => $_REQUEST['code'],
+        'client_id' => variable_get('yaruxp_client_id', null),
+        'client_secret'  => variable_get('yaruxp_client_secret', null)
+      );
+
+      $ch = curl_init();
+      curl_setopt($ch, CURLOPT_URL, 'https://oauth.yandex.ru/token');
+      curl_setopt($ch, CURLOPT_POST, true);
+      curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+      $response = json_decode(curl_exec($ch));
+      curl_close($ch);
+
+      if(isset($response->access_token)) {
+        variable_set('yaruxp_token', $response->access_token);
+
+        drupal_set_message(t('Token has been successfully received!'));
+
+        drupal_goto('admin/settings/yaruxp');
+      }
+      else;
+    }
+    else;
+  }
+
+  function yaruxp_materials_form() {
+    $form = array();
+
+    $form['materials'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Material types for sending to Ya.Ru')
+    );
+    $form['materials']['types'] = array(
+      '#type' => 'checkboxes',
+      '#title' => '',
+      '#options' => _yaruxp_get_content_types(),
+      '#default_value' => variable_get('yaruxp_types', array())
+    );
+
+    $form['save_settings'] = array(
+      '#type' => 'submit',
+      '#value' => t('Save settings')
+    );
+
+    return $form;
+  }
+  function yaruxp_materials_form_submit($form, &$form_state) {
+    variable_set('yaruxp_types', _yaruxp_construct_variable($form_state['values']['types']));
+
+    drupal_set_message(t('Materials settings has been successfully saved!'));
+  }
+
+
+  function yaruxp_form_alter(&$form, &$form_state, $form_id) {
+    if(in_array($form['type']['#value'], variable_get('yaruxp_types', array()))) {
+      $form['yaruxp'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Ya.Ru CrossPoster'),
+        '#collapsible' => true,
+        '#weight' => 3
+      );
+
+      $options = _yaruxp_get_options();
+
+      $form['yaruxp']['yaruxp_send'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Send this node to Ya.Ru'),
+        '#default_value' => $options['check_flag'] ? 1 : 0
+      );
+    }
+  }
+
+  function yaruxp_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL) {
+    if(in_array($node->type, variable_get('yaruxp_types', array()))) {
+
+      switch($op) {
+        case 'insert':
+          if($node->yaruxp_send) {
+            $ch = curl_init();
+
+            curl_setopt($ch, CURLOPT_URL, 'https://api-yaru.yandex.ru/person/'.variable_get('yaruxp_uid', '').'/post/?format=json&oauth_token='.variable_get('yaruxp_token', ''));
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-type: application/atom+xml; type=entry'));
+            curl_setopt($ch, CURLOPT_POST, true);
+
+            $title = $node->title;
+            $body = $node->body;
+
+            $options = _yaruxp_get_options();
+            if($options['add_link']) {
+              global $base_url;
+
+              $url = 'node/'.$node->nid;
+
+              $body .= '<p>'.l('Оригинальный материал', $base_url.'/'.$url).'</p>';
+            }
+
+            $xml = '
+            <entry xmlns="http://www.w3.org/2005/Atom" xmlns:y="http://api.yandex.ru/yaru/">
+                <title>'.$title.'</title>
+                <content type="text"><![CDATA['.$body.']]></content>
+                <category scheme="urn:ya.ru:posttypes" term="text"/>
+            </entry>
+            ';
+
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $xml);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+            $response = json_decode(curl_exec($ch));
+            curl_close($ch);
+
+            if(isset($response->id)) {
+              $post_id_arr = explode('/', $response->id);
+              $post_id = $post_id_arr[2];
+
+              $node_post = array(
+                'nid' => $node->nid,
+                'pid' => $post_id
+              );
+
+              drupal_write_record('yaruxp_nodes_posts', $node_post);
+
+              drupal_set_message(t('Node has been successfully cross-posted to Ya.Ru!'));
+            }
+            else;
+          }
+          break;
+        case 'update':
+          break;
+        case 'delete':
+          $options = _yaruxp_get_options();
+          if($options['delete_post']) {
+            $post_id_query = db_query("SELECT `pid` FROM {yaruxp_nodes_posts} WHERE `nid` = %d", $node->nid);
+
+            while($post_id_result = db_fetch_object($post_id_query)) {
+              $ch = curl_init();
+
+              curl_setopt($ch, CURLOPT_URL, 'https://api-yaru.yandex.ru/person/'.variable_get('yaruxp_uid', '').'/post/'.$post_id_result->pid.'/?format=json&oauth_token='.variable_get('yaruxp_token', ''));
+              curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-type: application/atom+xml; type=entry'));
+              curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
+
+              curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+              curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
+              $response = curl_exec($ch);
+              curl_close($ch);
+
+              drupal_set_message(t('Post has been successfully deleted from Ya.Ru'));
+            }
+          }
+          break;
+      }
+
+    }
+  }

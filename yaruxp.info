@@ -1,0 +1,5 @@
+name = Ya.Ru CrossPoster
+description = Module for CrossPosting nodes to Ya.Ru blogs
+
+version = 6.x-0.1.0
+core = 6.x
