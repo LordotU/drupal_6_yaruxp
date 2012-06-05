@@ -133,7 +133,10 @@
       );
 
       $ch = curl_init();
-      curl_setopt($ch, CURLOPT_URL, 'https://oauth.yandex.ru/token');
+
+      $cURL = 'https://oauth.yandex.ru/token';
+
+      curl_setopt($ch, CURLOPT_URL, $cURL);
       curl_setopt($ch, CURLOPT_POST, true);
       curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
       curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -205,10 +208,13 @@
 
       switch($op) {
         case 'insert':
+        case 'update':
           if($node->yaruxp_send) {
             $ch = curl_init();
 
-            curl_setopt($ch, CURLOPT_URL, 'https://api-yaru.yandex.ru/person/'.variable_get('yaruxp_uid', '').'/post/?format=json&oauth_token='.variable_get('yaruxp_token', ''));
+            $cURL = 'https://api-yaru.yandex.ru/person/'.variable_get('yaruxp_uid', '').'/post/?format=json&oauth_token='.variable_get('yaruxp_token', '');
+
+            curl_setopt($ch, CURLOPT_URL, $cURL);
             curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-type: application/atom+xml; type=entry'));
             curl_setopt($ch, CURLOPT_POST, true);
 
@@ -254,8 +260,6 @@
             }
             else;
           }
-          break;
-        case 'update':
           break;
         case 'delete':
           $options = _yaruxp_get_options();
